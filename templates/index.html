@@ -388,13 +388,10 @@ body.no-pls .main { margin-left: 0; display: flex; align-items: center; justify-
 
   <div class="mb-2">
     <label class="form-label">API klíč</label>
-    <div class="input-group input-group-sm">
-      <input type="password" class="form-control" id="apiKey" placeholder="x-heureka-api-key">
-      <button class="btn btn-outline-secondary" onclick="toggleKey()"><i class="bi bi-eye" id="eyeIco"></i></button>
-    </div>
-    <div style="font-size:.7rem;color:rgba(255,255,255,.35);margin-top:.35rem;line-height:1.35">
+    <input type="password" class="form-control form-control-sm" id="apiKey" placeholder="x-heureka-api-key">
+    <div style="font-size:.7rem;color:rgba(255,255,255,.35);margin-top:.35rem;line-height:1.4">
       <i class="bi bi-shield-check" style="color:rgba(255,255,255,.25)"></i>
-      Klíč se nikam neukládá — používá se pouze pro přímé volání Heureka API.
+      Klíč není nikde uložen ani cachován. Jeho vložením se jednorázově stáhnou statistiky přes Heureka API — pak je zahozen.
     </div>
   </div>
 
@@ -542,6 +539,13 @@ function fmtEur(v, dec=3) {
 function fmtPct(v, dec=1) {
   if (v == null) return '—';
   return (v>0?'+':'')+v.toFixed(dec)+'%';
+}
+// Normalize bracket key: '20.01-50.00' and '21-50' → '21-50'
+function normBracket(br) {
+  const parts = br.split('-');
+  const lo = Math.ceil(parseFloat(parts[0]));
+  const hi = parts[1] === '' ? '' : Math.round(parseFloat(parts[1]));
+  return hi === '' ? `${lo}-` : `${lo}-${hi}`;
 }
 function shortName(id) {
   const n = S.names[id]; if (!n) return 'Kat. '+id;
@@ -1056,11 +1060,27 @@ function renderTable() {
       ${apiCells}${cpcCells}${changeCell}
     </tr>`;
 
-    const brackets = visiblePls.length ? visiblePls[0].brackets : [];
-    const detailRows = brackets.map(br => {
-      const brCpcs = visiblePls.map(pl=>{
+    // Build per-pl bracket lookup maps (canonical → actual key)
+    const plBracketMaps = visiblePls.map(pl => {
+      const m = {};
+      for (const br of (pl.brackets || [])) m[normBracket(br)] = br;
+      return m;
+    });
+    const canonicalBrackets = [];
+    const seenBr = new Set();
+    for (const pl of visiblePls) {
+      for (const br of (pl.brackets || [])) {
+        const n = normBracket(br);
+        if (!seenBr.has(n)) { seenBr.add(n); canonicalBrackets.push(n); }
+      }
+    }
+    const detailRows = canonicalBrackets.map(canonBr => {
+      const br = canonBr;
+      const brCpcs = visiblePls.map((pl, pi)=>{
         const cat = pl.categories.find(c=>c.id===r.id);
-        return cat ? (cat.cpcs[br]??null) : null;
+        if (!cat) return null;
+        const actualKey = plBracketMaps[pi][canonBr];
+        return actualKey != null ? (cat.cpcs[actualKey]??null) : null;
       });
       // Skip bracket rows where every price list has null or zero
       if (!brCpcs.some(v=>v!=null&&v>0)) return '';
