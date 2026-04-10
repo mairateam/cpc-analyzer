@@ -309,6 +309,41 @@ body.no-pls .main { margin-left: 0; display: flex; align-items: center; justify-
 /* ── ROW COUNT ───────────────────────────────────── */
 #rowCount { color: var(--m-muted); font-size: .78rem; }
 
+/* ── TOUR ────────────────────────────────────────── */
+#tourHl {
+  display: none; position: fixed; border-radius: 8px;
+  z-index: 10001; pointer-events: none;
+  box-shadow: 0 0 0 9999px rgba(0,0,0,.58), 0 0 0 2px var(--m-orange), 0 0 20px rgba(255,107,34,.3);
+  transition: top .3s, left .3s, width .3s, height .3s;
+}
+#tourBackdrop {
+  display: none; position: fixed; inset: 0; z-index: 10000;
+}
+.tour-card {
+  display: none; position: fixed; z-index: 10002;
+  background: #162d22;
+  border: 1px solid rgba(255,107,34,.3);
+  border-radius: 12px;
+  padding: 1.2rem 1.4rem 1rem;
+  width: 270px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.55);
+}
+.tour-card::before {
+  content: ''; position: absolute;
+  border: 9px solid transparent;
+}
+.tour-card.arr-left::before  { right: 100%; top: 24px; border-right-color: #162d22; }
+.tour-card.arr-top::before   { bottom: 100%; right: 24px; border-bottom-color: #162d22; }
+.tour-dots { display: flex; gap: 5px; margin-bottom: .8rem; }
+.tour-dot  { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,.2); transition: all .2s; }
+.tour-dot.on { background: var(--m-orange); width: 16px; border-radius: 3px; }
+.tour-ttl  { font-weight: 700; color: var(--m-orange); font-size: .88rem; margin-bottom: .4rem; }
+.tour-txt  { color: rgba(255,255,255,.72); font-size: .8rem; line-height: 1.5; margin-bottom: .9rem; }
+.tour-foot { display: flex; align-items: center; gap: .5rem; }
+.tour-skip { font-size: .73rem; color: rgba(255,255,255,.28); cursor: pointer; margin-right: auto; }
+.tour-skip:hover { color: rgba(255,255,255,.5); }
+.tour-next { background: var(--m-orange) !important; border-color: var(--m-orange) !important; color: #000 !important; font-weight: 700 !important; font-size: .78rem !important; }
+
 /* ── FORM CHECK (switch) ─────────────────────────── */
 .form-check-input { background-color: rgba(255,255,255,.2) !important; border-color: rgba(255,255,255,.3) !important; }
 .form-check-input:checked { background-color: var(--m-orange) !important; border-color: var(--m-orange) !important; }
@@ -506,6 +541,11 @@ body.no-pls .main { margin-left: 0; display: flex; align-items: center; justify-
 
 </div>
 
+<!-- Tour elements -->
+<div id="tourBackdrop"></div>
+<div id="tourHl"></div>
+<div id="tourCard" class="tour-card"></div>
+
 <script>
 // ── CHART.JS DARK DEFAULTS ───────────────────────────────────────────────
 Chart.defaults.color = 'rgba(255,255,255,0.55)';
@@ -523,6 +563,7 @@ const S = {
   hiddenPls: new Set(),  // labels of price lists whose columns are hidden
   market: null,    // 'cz' or 'sk'
   allLabels: [],   // all known labels (including unloaded hidden ones)
+  tourShown: false,
 };
 
 // ── INIT ──────────────────────────────────────────────────────────────
@@ -960,6 +1001,7 @@ function renderAll() {
   document.getElementById('legendRow').style.display = S.api ? '' : 'none';
   renderSummary();
   renderTable();
+  showTour();
 }
 
 function renderSummary() {
@@ -1125,6 +1167,85 @@ function renderTable() {
 
   document.getElementById('tBody').innerHTML = rows_html;
   document.getElementById('rowCount').textContent = `${filtered.length} kategorií`;
+}
+
+// ── TOUR ──────────────────────────────────────────────────────────────
+const _tourSteps = [
+  {
+    id: 'chgOnly',
+    title: 'Jen změněné',
+    text: 'Zaškrtni, pokud chceš v tabulce vidět jen kategorie, kde se CPC skutečně pohnulo. Ostatní se skryjí.',
+    pos: 'below',
+  },
+  {
+    id: 'colVisibility',
+    title: 'Viditelnost ceníků',
+    text: 'Kliknutím na ikonku oka odkrývej nebo skrývej jednotlivé ceníky. Máš k dispozici data až rok zpět — zobraz si jen sloupce, které chceš porovnat.',
+    pos: 'right',
+  },
+  {
+    id: 'apiKey',
+    title: 'API klíč (volitelný)',
+    text: 'Vlož Heureka API klíč, pokud tě zajímá, ve kterých kategoriích máš největší náklady a tržby. Statistiky se jednorázově stáhnou a tabulka se seřadí a obohatí o reálná data z tvého účtu.',
+    pos: 'right',
+  },
+];
+let _tourStep = 0;
+
+function showTour() {
+  if (S.tourShown) return;
+  _tourStep = 0;
+  _renderTourStep();
+}
+
+function _renderTourStep() {
+  const step = _tourSteps[_tourStep];
+  const target = document.getElementById(step.id);
+  const hl = document.getElementById('tourHl');
+  const card = document.getElementById('tourCard');
+  const bd = document.getElementById('tourBackdrop');
+  if (!target) return;
+
+  const PAD = 8;
+  const r = target.getBoundingClientRect();
+
+  hl.style.cssText = `display:block;position:fixed;border-radius:8px;z-index:10001;pointer-events:none;
+    top:${r.top - PAD}px;left:${r.left - PAD}px;
+    width:${r.width + PAD * 2}px;height:${r.height + PAD * 2}px;
+    box-shadow:0 0 0 9999px rgba(0,0,0,.58),0 0 0 2px var(--m-orange),0 0 20px rgba(255,107,34,.3);`;
+  bd.style.display = 'block';
+
+  const dots = _tourSteps.map((_, i) => `<div class="tour-dot${i === _tourStep ? ' on' : ''}"></div>`).join('');
+  const isLast = _tourStep === _tourSteps.length - 1;
+
+  card.className = `tour-card ${step.pos === 'below' ? 'arr-top' : 'arr-left'}`;
+  card.innerHTML = `
+    <div class="tour-dots">${dots}</div>
+    <div class="tour-ttl">${step.title}</div>
+    <div class="tour-txt">${step.text}</div>
+    <div class="tour-foot">
+      <span class="tour-skip" onclick="closeTour()">Přeskočit</span>
+      <button class="btn btn-sm tour-next" onclick="${isLast ? 'closeTour()' : 'nextTourStep()'}">
+        ${isLast ? 'Hotovo ✓' : 'Dále →'}
+      </button>
+    </div>`;
+
+  if (step.pos === 'right') {
+    card.style.cssText = `display:block;left:${r.right + 18}px;top:${Math.max(10, r.top - 10)}px;right:auto;bottom:auto;`;
+  } else {
+    card.style.cssText = `display:block;top:${r.bottom + 14}px;right:${Math.max(10, window.innerWidth - r.right - 5)}px;left:auto;bottom:auto;`;
+  }
+}
+
+function nextTourStep() {
+  if (_tourStep < _tourSteps.length - 1) { _tourStep++; _renderTourStep(); }
+}
+
+function closeTour() {
+  S.tourShown = true;
+  document.getElementById('tourHl').style.display = 'none';
+  document.getElementById('tourCard').style.display = 'none';
+  document.getElementById('tourBackdrop').style.display = 'none';
 }
 
 function toggleRow(id) {
